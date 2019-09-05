@@ -49,7 +49,7 @@ OMNI = file(params.genomes[ params.assembly ].omni )
 HAPMAP = file(params.genomes[ params.assembly ].hapmap )
 AXIOM = file(params.genomes[ params.assembly ].axiom )
 
-INTERVALS = file(params.genomes[ params.assembly ].intervals )
+INTERVALS = params.intervals ? file(params.intervals) : file(params.genomes[ params.assembly ].intervals )
 
 // This is a bit simplistic and uses each interval , instead of pooling smaller intervals into one job. 
 regions = []

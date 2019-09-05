@@ -4,7 +4,7 @@
 
 This pipeline generates human whole-genome variant calls from short read files. 
 
-Please not that this code is not yet final!
+!!! Please note that this code is not yet final !!!
 
 ### Documentation 
 
