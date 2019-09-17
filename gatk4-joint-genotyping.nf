@@ -24,7 +24,7 @@ MILLS = file(params.genomes[ params.assembly ].mills )
 OMNI = file(params.genomes[ params.assembly ].omni )
 HAPMAP = file(params.genomes[ params.assembly ].hapmap )
 AXIOM = file(params.genomes[ params.assembly ].axiom )
-INTERVALS = file(params.genomes[params.assembly ].intervals )
+INTERVALS = params.intervals ? file(params.intervals) : file(params.genomes[params.assembly ].intervals )
 
 regions = []
 
@@ -79,7 +79,7 @@ process runGenomicsDBImport  {
 	tag "ALL|${params.assembly}|batch: ${region_tag}"
         publishDir "${OUTDIR}/${params.assembly}/Variants/GenomicsDB"
 	
-	scratch use_scratch 
+	scratch true
 
 	input:
 	file(vcf_list) from GVCF.collect()
@@ -283,6 +283,8 @@ process runRecalibrationModeSNP {
 	tag "ALL"
 	// publishDir "${OUTDIR}/${params.assembly}/Variants/Recal"
 
+	when: params.recal
+
 	input:
 	set file(vcf),file(index) from inputRecalSNP
 
@@ -302,7 +304,6 @@ process runRecalibrationModeSNP {
 		-an ${snp_recalibration_values.join(' -an ')} \
                 -mode SNP \
 		--trust-all-polymorphic \
-		-L $INTERVALS \
 		--resource:hapmap,known=false,training=true,truth=true,prior=15 $HAPMAP \
 		--resource:omni,known=false,training=true,truth=true,prior=12 $OMNI \
 		--resource:1000G,known=false,training=true,truth=false,prior=10 $G1K \
@@ -335,7 +336,6 @@ process runRecalibrationModeIndel {
        	        --tranches-file $tranches \
 		-an ${indel_recalbration_values.join(' -an ')} \
        	        -mode INDEL \
-		-L $INTERVALS \
                 --resource:mills,known=false,training=true,truth=true,prior=12.0 $MILLS \
 		--resource:axiomPoly,known=false,training=true,truth=false,prior=10 $AXIOM \
                	--resource:dbsnp,known=true,training=false,truth=false,prior=2 $DBSNP \

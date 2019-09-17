@@ -19,7 +19,7 @@ if (params.genomes.containsKey(params.assembly) == false) {
 
 REF = file(params.genomes[ params.assembly ].fasta)
 DBSNP = file(params.genomes[ params.assembly ].dbsnp )
-INTERVALS = file(params.genomes[params.assembly].intervals)
+INTERVALS = params.intervals ? file(params.intervals) : file(params.genomes[params.assembly].intervals)
 
 regions = []
 

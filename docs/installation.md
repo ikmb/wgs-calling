@@ -2,10 +2,12 @@
 
 # Installation
 
+If you are at the IKMB, you can safely ignore the following...
+
 ## References
 
-This pipeline requires the GATK resource bundle as a reference. Please download it from [here](https://software.broadinstitute.org/gatk/download/bundle).
-folder containing the various assembly-specific sub folders will be needed later. 
+This pipeline requires the GATK resource bundle as a reference. Please download it from [here](https://software.broadinstitute.org/gatk/download/bundle) to
+a location where it is visible to all nodes in your cluster. The folder containing the various assembly-specific sub folders will be needed later. 
 
 ## Config file
 

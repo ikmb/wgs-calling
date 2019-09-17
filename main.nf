@@ -21,7 +21,7 @@ def helpMessage() {
 
 	Optional parameters:
 	--email		An Email adress to which reports are sent
-
+	--intervals	A list of target intervals to perform analysis against (optional, by default the built-in intervals are used)
 	Output:
 	--outdir	Local directory to which all output is written (default: results)
 	""".stripIndent()

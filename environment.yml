@@ -15,4 +15,4 @@ dependencies:
   - multiqc=1.6
   - gatk4=4.1.0.0
   - samtools=1.9
-
+  - bcftools=1.9
