@@ -30,8 +30,7 @@ regions = []
 // Make the region files
 INTERVALS.eachLine { str ->
         if(! str.startsWith("@") ) {
-                data = str.split("\t")
-                regions << "${data[0]}:${data[1]}-${data[2]}"
+                regions << str.trim()
         }
 }
 
@@ -89,8 +88,8 @@ process runFastp {
   set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, center, run_date, fastqR1, fastqR2 from inputFastp
 
   output:
-  set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file("*{left}"),file("*${right}") into outputTrimAndSplit
-  set indivID, sampleID, libraryID, file(json),file(html) into outputReportTrimming
+  set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file("*${left}"),file("*${right}") into outputTrimAndSplit
+  set val(indivID), val(sampleID), val(libraryID), file(json),file(html) into outputReportTrimming
 
   script:
   left = file(fastqR1).getBaseName() + ".trimmed.fastq.gz"
@@ -115,14 +114,14 @@ process runBwa {
     scratch true
 
     input:
-    set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, run_date, center,file(fastqR1),file(fastqR2) from inputBwa
+    set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, center, run_date,file(fastqR1),file(fastqR2) from inputBwa
 
     output:
 
     set indivID, sampleID, file(outfile) into runBWAOutput
 
     script:
-    this_chunk = fastqR1.getName().split(".")[0]
+    this_chunk = fastqR1.getName().substring(0,4)
     outfile = sampleID + "_" + libraryID + "_" + rgID + "_" + this_chunk + ".aligned.bam"
     outfile_index = outfile + ".bai"
     dict_file = REF.getBaseName() + ".dict"
@@ -142,10 +141,10 @@ process runFixTags {
 	scratch true
 
 	input:
-    	set indivID, sampleID, file(aligned_bam_list) from inputFixTags
+    	set val(indivID), val(sampleID), file(aligned_bam_list) from inputFixTags
 
 	output:
-	set indivID,sampleID,file(bam_fixed),file(bam_fixed_bai) into inputMarkDuplicates
+	set val(indivID),val(sampleID),file(bam_fixed),file(bam_fixed_bai) into inputMarkDuplicates
 
 	script:
 	bam_fixed = indivID + "_" + sampleID + ".fixed_tags.bam"
@@ -293,7 +292,6 @@ process runApplyBQSR {
              --static-quantized-quals 10 --static-quantized-quals 20 --static-quantized-quals 30 \
              --use-original-qualities \
              --input ${realign_bam} \
-	     -L $INTERVALS \
              -bqsr ${recal_table} \
              --output ${outfile_bam} \
              -OBM true \

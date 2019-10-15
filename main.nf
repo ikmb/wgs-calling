@@ -97,7 +97,7 @@ Channel.from(inputFile)
 
 process runFastp {
 
-  scratch params.scratch
+  //scratch params.scratch
 
   input:
   set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, center, run_date, fastqR1, fastqR2 from inputFastp
