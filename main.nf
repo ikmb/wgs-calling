@@ -50,6 +50,7 @@ HAPMAP = file(params.genomes[ params.assembly ].hapmap )
 AXIOM = file(params.genomes[ params.assembly ].axiom )
 
 INTERVALS = params.intervals ? file(params.intervals) : file(params.genomes[ params.assembly ].intervals )
+INTERVAL_LIST = file(params.genomes[ params.assembly ].interval_list )
 
 // This is a bit simplistic and uses each interval , instead of pooling smaller intervals into one job. 
 regions = []
@@ -170,7 +171,7 @@ process runFixTags {
 			-I /dev/stdin \
 			-O $bam_fixed \
 			-R $REF \
-			--IS_BISULFITE_SEQUENCE false
+			--IS_BISULFITE_SEQUENCE false 
 
 		samtools index $bam_fixed
 
@@ -208,9 +209,7 @@ process runMarkDuplicates {
                 --MAX_RECORDS_IN_RAM 1000000 \
 		--ASSUME_SORT_ORDER coordinate \
                 --CREATE_MD5_FILE true \
-		--TMP_DIR tmpdir 
-
-		rm -Rf tmpdir
+		--TMP_DIR \$TMPDIR 
         """
 }
 
@@ -282,7 +281,7 @@ process runApplyBQSR {
 	set indivID, sampleID, file(recal_table), file(realign_bam) from inputForApplyBQSR
 
 	output:
-	set indivID, sampleID, file(outfile_bam), file(outfile_bai) into BamForWGSStats,inputHCSample
+	set indivID, sampleID, file(outfile_bam), file(outfile_bai) into (BamForWGSStats,inputHCSample,BamForAlignStats)
 	            
     	script:
     	outfile_bam = indivID + "." + sampleID + ".clean.cram"
@@ -528,18 +527,18 @@ process runMergeHardFilterVcf {
 //
 // ------------------------------------------------------------------------------------------------------------
 
-process runWgsCoverage {
+process runAlignCoverage {
 
         publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/picard_stats", mode: 'copy'
 
 	input:
-	set val(indivID),val(sampleID),val(bam),val(bai) from BamForWGSStats
+	set val(indivID),val(sampleID),val(bam),val(bai) from BamForAlignStats
 
 	output:
-	file(wgs_stats) into CoverageStats
+	file(wgs_stats) into AlignStats
 
 	script:
-	wgs_stats = indivID + "_" + sampleID + "_wgs_coverage.txt"
+	wgs_stats = indivID + "_" + sampleID + "_align_stats.txt"
 
 	"""
 		picard CollectAlignmentSummaryMetrics \
@@ -550,6 +549,28 @@ process runWgsCoverage {
 	
 }
 
+process runWgsCoverage {
+
+        publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/picard_stats", mode: 'copy'
+
+        input:
+        set val(indivID),val(sampleID),val(bam),val(bai) from BamForWGSStats
+
+        output:
+        file(coverage_stats) into CoverageStats
+
+        script:
+        coverage_stats = indivID + "_" + sampleID + "_wgs_stats.txt"
+
+        """
+                picard CollectWgsMetrics \
+                I=$bam \
+                O=$coverage_stats \
+                R=$REF \
+                INTERVALS=$INTERVAL_LIST
+        """
+}
+
 process runMultiQCLibrary {
 
     publishDir "${OUTDIR}/Summary/Library", mode: 'copy'
@@ -558,6 +579,7 @@ process runMultiQCLibrary {
     file('*') from runMarkDuplicatesOutput_QC.flatten().toList()
     file('*') from outputReportTrimming.flatten().toList()
     file('*') from CoverageStats.flatten().toList()
+    file('*') from AlignStats.flatten().toList()
 
     output:
     file("library_multiqc*") into multiqc_report

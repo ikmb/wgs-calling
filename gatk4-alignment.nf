@@ -24,6 +24,7 @@ DBSNP = file(params.genomes[ params.assembly ].dbsnp )
 G1K = file(params.genomes[ params.assembly ].g1k )
 MILLS = file(params.genomes[ params.assembly ].mills )
 INTERVALS = file(params.genomes[ params.assembly ].intervals )
+INTERVAL_LIST = file(params.genomes[ params.assembly ].interval_list )
 
 // This is a bit simplistic and uses each interval , instead of pooling smaller intervals into one job. 
 regions = []
@@ -184,9 +185,9 @@ process runMarkDuplicates {
     file(outfile_md5) into MarkDuplicatesMD5
     
     script:
-    outfile_bam = indivID + "." + sampleID + ".dedup.bam"
-    outfile_bai = indivID + "." + sampleID + ".dedup.bai"
-    outfile_md5 = indivID + "." + sampleID + ".dedup.bam.md5"
+    outfile_bam = indivID + "_" + sampleID + ".dedup.bam"
+    outfile_bai = indivID + "_" + sampleID + ".dedup.bai"
+    outfile_md5 = indivID + "_" + sampleID + ".dedup.bam.md5"
 
     outfile_metrics = sampleID + "_duplicate_metrics.txt"	
 
@@ -221,7 +222,7 @@ process runBaseRecalibrator {
 	set indivID, sampleID, dedup_bam into BamForBQSR
     
     	script:
-        region_tag = region.trim()
+        region_tag = region.trim().replace(/:/, '_')
     	recal_table = indivID + "." + sampleID + "." + region_tag + ".recal_table.txt" 
        
     	"""
@@ -231,7 +232,7 @@ process runBaseRecalibrator {
 		--known-sites ${MILLS} \
 		--known-sites ${DBSNP} \
 		--use-original-qualities \
-		-L $region_tag \
+		-L $region \
 		-ip 150 \
 		--output ${recal_table}
 	"""
@@ -253,7 +254,7 @@ process runGatherBQSRReports {
 	script:
 	sorted_reports = []
 	regions.each { region ->
-                region_tag = region.trim()
+	        region_tag = region.trim().replace(/:/, '_')
                 this_report = sampleID + "." + region_tag + ".recal_table.txt" 
                 sorted_reports << reports.find { it =~ this_report }
         }	
@@ -279,7 +280,7 @@ process runApplyBQSR {
 	set indivID, sampleID, file(recal_table), file(realign_bam) from inputForApplyBQSR
 
 	output:
-	set indivID, sampleID, file(outfile_bam), file(outfile_bai) into BamForWGSStats
+	set indivID, sampleID, file(outfile_bam), file(outfile_bai) into (BamForWGSStats,BamForAlignStats)
 	            
     	script:
     	outfile_bam = indivID + "." + sampleID + ".clean.cram"
@@ -316,27 +317,48 @@ process runApplyBQSR {
 //
 // ------------------------------------------------------------------------------------------------------------
 
-process runWgsCoverage {
+process runAlignmentStats {
 
-	tag "${indivID}|${sampleID}|${params.assembly}"
         publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/picard_stats", mode: 'copy'
 
 	input:
-	set val(indivID),val(sampleID),val(bam),val(bai) from BamForWGSStats
+	set val(indivID),val(sampleID),val(bam),val(bai) from BamForAlignStats
 
 	output:
-	file(wgs_stats) into CoverageStats
+	file(align_stats) into AlignStats
 
 	script:
-	wgs_stats = indivID + "_" + sampleID + "_wgs_coverage.txt"
+	align_stats = indivID + "_" + sampleID + "_alignment_stats.txt"
 
 	"""
 		picard CollectAlignmentSummaryMetrics \
 		R=$REF \
 		I=$bam \
-		O=$wgs_stats
+		O=$align_stats
 	"""
 	
+}
+
+process runWgsCoverage {
+
+	publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/picard_stats", mode: 'copy'
+
+	input:
+	set val(indivID),val(sampleID),val(bam),val(bai) from BamForWGSStats
+
+	output:
+	file(coverage_stats) into CoverageStats
+
+	script:
+	coverage_stats = indivID + "_" + sampleID + "_wgs_stats.txt"
+
+	"""
+		picard CollectWgsMetrics \
+		I=$bam \
+		O=$coverage_stats \
+		R=$REF \
+		INTERVALS=$INTERVAL_LIST
+	"""
 }
 
 process runMultiQCLibrary {
@@ -346,6 +368,7 @@ process runMultiQCLibrary {
 	    
     input:
     file('*') from runMarkDuplicatesOutput_QC.flatten().toList()
+    file('*') from AlignStats.flatten().toList()
     file('*') from outputReportTrimming.flatten().toList()
     file('*') from CoverageStats.flatten().toList()
 
