@@ -41,7 +41,7 @@ if (params.genomes.containsKey(params.assembly) == false) {
 }
 
 REF = file(params.genomes[ params.assembly ].fasta)
-DICT = REF.getBaseName() + ".dict"
+DICT = file(params.genomes[ params.assembly ].dict)
 DBSNP = file(params.genomes[ params.assembly ].dbsnp )
 G1K = file(params.genomes[ params.assembly ].g1k )
 MILLS = file(params.genomes[ params.assembly ].mills )
@@ -114,7 +114,7 @@ process runFastp {
   html = indivID + "_" + sampleID + "_" + libraryID + ".fastp.html"
 
   """
-	fastp --in1 $fastqR1 --in2 $fastqR2 --out1 $left --out2 $right -w ${task.cpus} -s ${task.cpus*3} -j $json -h $html
+	fastp --in1 $fastqR1 --in2 $fastqR2 --out1 $left --out2 $right --detect_adapter_for_pe -w ${task.cpus} -s ${task.cpus*3} -j $json -h $html
   """
 
 }
@@ -138,10 +138,9 @@ process runBwa {
     this_chunk = fastqR1.getName().substring(0,4)
     outfile = sampleID + "_" + libraryID + "_" + rgID + "_" + this_chunk + ".aligned.bam"
     outfile_index = outfile + ".bai"
-    dict_file = REF.getBaseName() + ".dict"
 
     """
-	bwa mem -H $dict_file -M -R "@RG\\tID:${rgID}\\tPL:ILLUMINA\\tPU:${platform_unit}\\tSM:${indivID}_${sampleID}\\tLB:${libraryID}\\tDS:${REF}\\tCN:${center}" -t ${task.cpus} ${REF} $fastqR1 $fastqR2 | samtools sort -m 4G -@ 4 -o $outfile - 
+	bwa mem -H $DICT -M -R "@RG\\tID:${rgID}\\tPL:ILLUMINA\\tPU:${platform_unit}\\tSM:${indivID}_${sampleID}\\tLB:${libraryID}\\tDS:${REF}\\tCN:${center}" -t ${task.cpus} ${REF} $fastqR1 $fastqR2 | samtools sort -m 4G -@ 4 -o $outfile - 
 	samtools index $outfile
     """
 }

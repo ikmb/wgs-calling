@@ -20,6 +20,7 @@ if (params.genomes.containsKey(params.assembly) == false) {
 }
 
 REF = file(params.genomes[ params.assembly ].fasta)
+DICT = file(params.genomes[ params.assembly ].dict)
 DBSNP = file(params.genomes[ params.assembly ].dbsnp )
 G1K = file(params.genomes[ params.assembly ].g1k )
 MILLS = file(params.genomes[ params.assembly ].mills )
@@ -89,7 +90,7 @@ process runFastp {
   set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, center, run_date, fastqR1, fastqR2 from inputFastp
 
   output:
-  set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file("*${left}"),file("*${right}") into outputTrimAndSplit
+  set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file("${left}"),file("${right}") into inputBwa
   set val(indivID), val(sampleID), val(libraryID), file(json),file(html) into outputReportTrimming
 
   script:
@@ -99,18 +100,13 @@ process runFastp {
   html = indivID + "_" + sampleID + "_" + libraryID + "-" + rgID + ".fastp.html"
 
   """
-	fastp --in1 $fastqR1 --in2 $fastqR2 --out1 $left --out2 $right -w ${task.cpus} -s ${task.cpus*3} -j $json -h $html
+	fastp --in1 $fastqR1 --in2 $fastqR2 --out1 $left --out2 $right --detect_adapter_for_pe -w ${task.cpus} -j $json -h $html
   """
 
 }
 
-inputBwa = outputTrimAndSplit.transpose( by: [9,10] )
-
 // Run BWA on each trimmed chunk
 process runBwa {
-
-    tag "${indivID}|${sampleID}|${libraryID}|${rgID}|${this_chunk}|${params.assembly}"
-    // publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/Processing/Libraries/${libraryID}/${rgID}/BWA/"
 
     scratch true
 
@@ -122,13 +118,11 @@ process runBwa {
     set indivID, sampleID, file(outfile) into runBWAOutput
 
     script:
-    this_chunk = fastqR1.getName().substring(0,4)
-    outfile = sampleID + "_" + libraryID + "_" + rgID + "_" + this_chunk + ".aligned.bam"
+    outfile = sampleID + "_" + libraryID + "_" + rgID + ".aligned.bam"
     outfile_index = outfile + ".bai"
-    dict_file = REF.getBaseName() + ".dict"
 
     """
-	bwa mem -H $dict_file -M -R "@RG\\tID:${rgID}\\tPL:ILLUMINA\\tPU:${platform_unit}\\tSM:${indivID}_${sampleID}\\tLB:${libraryID}\\tDS:${REF}\\tCN:${center}" -t ${task.cpus} ${REF} $fastqR1 $fastqR2 | samtools sort -m 4G -@ 4 -o $outfile - 
+	bwa mem -H $DICT -M -R "@RG\\tID:${rgID}\\tPL:ILLUMINA\\tPU:${platform_unit}\\tSM:${indivID}_${sampleID}\\tLB:${libraryID}\\tDS:${REF}\\tCN:${center}" -t ${task.cpus} ${REF} $fastqR1 $fastqR2 | samtools sort -m 4G -@ 4 -o $outfile - 
 	samtools index $outfile
     """
 }
@@ -151,20 +145,32 @@ process runFixTags {
 	bam_fixed = indivID + "_" + sampleID + ".fixed_tags.bam"
 	bam_fixed_bai = bam_fixed + ".bai"
 
-	"""
-		gatk MergeSamFiles \
-         	        -I ${aligned_bam_list.join(' -I ')} \
-	                -O /dev/stdout \
-			--USE_THREADING true \
-	                --SORT_ORDER coordinate | gatk SetNmMdAndUqTags \
-			-I /dev/stdin \
-			-O $bam_fixed \
-			-R $REF \
-			--IS_BISULFITE_SEQUENCE false
+	if (aligned_bam_list.size() > 1 && aligned_bam_list.size() < 1000 ) {
 
-		samtools index $bam_fixed
+		"""
+			gatk MergeSamFiles \
+         		        -I ${aligned_bam_list.join(' -I ')} \
+	                	-O /dev/stdout \
+				--USE_THREADING true \
+		                --SORT_ORDER coordinate | gatk SetNmMdAndUqTags \
+				-I /dev/stdin \
+				-O $bam_fixed \
+				-R $REF \
+				--IS_BISULFITE_SEQUENCE false
 
-	"""
+			samtools index $bam_fixed
+
+		"""
+	} else {
+
+		"""
+			gatk SetNmMdAndUqTags \
+                                -I $aligned_bam_list.join(' -I ')} \
+                                -O $bam_fixed \
+                                -R $REF \
+                                --IS_BISULFITE_SEQUENCE false
+		"""
+	}	
 }
 
 // Mark duplicate reads. This uses a discontinuted implementation of MD to fully leverage CRAM format
