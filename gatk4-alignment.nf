@@ -90,7 +90,7 @@ process runFastp {
   set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, center, run_date, fastqR1, fastqR2 from inputFastp
 
   output:
-  set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file("${left}"),file("${right}") into inputBwa
+  set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file(left),file(right) into inputBwa
   set val(indivID), val(sampleID), val(libraryID), file(json),file(html) into outputReportTrimming
 
   script:
@@ -165,10 +165,12 @@ process runFixTags {
 
 		"""
 			gatk SetNmMdAndUqTags \
-                                -I $aligned_bam_list.join(' -I ')} \
+                                -I ${aligned_bam_list.join(' -I ')} \
                                 -O $bam_fixed \
                                 -R $REF \
                                 --IS_BISULFITE_SEQUENCE false
+	
+	                        samtools index $bam_fixed
 		"""
 	}	
 }
@@ -359,7 +361,7 @@ process runWgsCoverage {
 	coverage_stats = indivID + "_" + sampleID + "_wgs_stats.txt"
 
 	"""
-		picard CollectWgsMetrics \
+		picard -Xmx${task.memory.toGiga()}G CollectWgsMetrics \
 		I=$bam \
 		O=$coverage_stats \
 		R=$REF \

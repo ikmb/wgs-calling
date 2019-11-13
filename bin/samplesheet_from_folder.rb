@@ -33,6 +33,8 @@ opts.banner = "Reads Fastq files from a folder and writes a sample sheet to STDO
 opts.separator ""
 opts.on("-f","--folder", "=FOLDER","Folder to scan") {|argument| options.folder = argument }
 opts.on("-c","--centre", "=CENTRE","Name of sequencing centre") {|argument| options.centre = argument }
+opts.on("-p","--platform","=PLATFORM", "Name of the sequencing platform") {|argument| options.platform = argument }
+
 opts.on("-h","--help","Display the usage information") {
  puts opts
  exit
@@ -44,14 +46,13 @@ abort "Folder not found (#{options.folder})" unless File.directory?(options.fold
 
 date = Time.now.strftime("%Y-%m-%d")
 options.centre ? center = options.centre : center = "IKMB"
+options.platform ? platform = options.platform : platform = "NovaSeq6000"
 
 fastq_files = Dir["#{options.folder}/*_R*.fastq.gz"]
 
 groups = fastq_files.group_by{|f| f.split("/")[-1].split(/_R[1,2]/)[0] }
 
 puts "IndivID;SampleID;libraryID;rgID;rgPU;platform;platform_model;Center;Date;R1;R2"
-
-#G00076-L2_S19_L003_R1_001.fastq.gz
 
 groups.each do |group, files|
 
@@ -70,7 +71,7 @@ groups.each do |group, files|
 
         pgu = flowcell_id + "." + lane + "." + index
 
-        puts "Indiv_#{sample};Sample_#{sample};#{library};#{readgroup};#{pgu};Illumina;NextSeq500;#{center};#{date};#{left};#{right}"
+        puts "Indiv_#{sample};Sample_#{sample};#{library};#{readgroup};#{pgu};Illumina;#{platform};#{center};#{date};#{left};#{right}"
 
 end
 
