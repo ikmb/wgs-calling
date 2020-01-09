@@ -59,9 +59,6 @@ Channel.from(inputFile)
 
 process runHCSample {
 
-  tag "${indivID}|${sampleID}|${params.assembly}|batch: ${region_tag}"
-  publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/HaplotypeCaller", mode: 'copy'
-
   // scratch use_scratch
 
   input:
@@ -91,7 +88,7 @@ process runHCSample {
 VariantsPerSample = inputCombineVariants.groupTuple(by: [0,1])
 
 process combineVariantsFromGenotyping {
-	tag "${indivID}|${params.assembly}"
+
 	publishDir "${OUTDIR}/${params.assembly}/HC", mode: 'copy'
 
 	input:

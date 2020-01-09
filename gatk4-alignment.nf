@@ -6,8 +6,6 @@ params.outdir = "alignments"
 
 OUTDIR = file(params.outdir)
 
-params.report = true
-
 // Specifies the underlying genome assembly
 params.assembly = "hg38"
 
@@ -52,17 +50,6 @@ params.format = "cram"
 use_scratch = params.scratch
 
 // Make sure the Nextflow version is current enough
-try {
-    if( ! nextflow.version.matches(">= $workflow.manifest.nextflowVersion") ){
-        throw GroovyException('Nextflow version too old')
-    }
-} catch (all) {
-    log.error "====================================================\n" +
-              "  Nextflow version $params.nf_required_version required! You are running v$workflow.nextflow.version.\n" +
-              "  Pipeline execution will continue, but things may break.\n" +
-              "  Please run `nextflow self-update` to update Nextflow.\n" +
-              "============================================================"
-}
 
 logParams(params, "nextflow_parameters-gatk4_alignment.txt")
 
@@ -81,8 +68,6 @@ Channel.from(inputFile)
        .set {  inputFastp }
 
 process runFastp {
-
-  tag "${indivID}|${sampleID}|${libraryID}"
 
   scratch true
 
@@ -127,16 +112,12 @@ process runBwa {
     """
 }
 
-inputFixTags = runBWAOutput.groupTuple(by: [0,1])
-
 process runFixTags {
 
-	tag "${indivID}|${sampleID}|${params.assembly}"
-	
 	scratch true
 
 	input:
-    	set val(indivID), val(sampleID), file(aligned_bam_list) from inputFixTags
+    	set val(indivID), val(sampleID), file(aligned_bam) runBWAOutput
 
 	output:
 	set val(indivID),val(sampleID),file(bam_fixed),file(bam_fixed_bai) into inputMarkDuplicates
@@ -145,40 +126,20 @@ process runFixTags {
 	bam_fixed = indivID + "_" + sampleID + ".fixed_tags.bam"
 	bam_fixed_bai = bam_fixed + ".bai"
 
-	if (aligned_bam_list.size() > 1 && aligned_bam_list.size() < 1000 ) {
-
-		"""
-			gatk MergeSamFiles \
-         		        -I ${aligned_bam_list.join(' -I ')} \
-	                	-O /dev/stdout \
-				--USE_THREADING true \
-		                --SORT_ORDER coordinate | gatk SetNmMdAndUqTags \
-				-I /dev/stdin \
-				-O $bam_fixed \
-				-R $REF \
-				--IS_BISULFITE_SEQUENCE false
-
-			samtools index $bam_fixed
-
-		"""
-	} else {
-
-		"""
-			gatk SetNmMdAndUqTags \
-                                -I ${aligned_bam_list.join(' -I ')} \
-                                -O $bam_fixed \
-                                -R $REF \
-                                --IS_BISULFITE_SEQUENCE false
+	"""
+		gatk SetNmMdAndUqTags \
+                -I $aligned_bam \
+                -O $bam_fixed \
+                -R $REF \
+                --IS_BISULFITE_SEQUENCE false
 	
-	                        samtools index $bam_fixed
-		"""
-	}	
+	        samtools index $bam_fixed
+	"""
 }
 
 // Mark duplicate reads. This uses a discontinuted implementation of MD to fully leverage CRAM format
 process runMarkDuplicates {
 
-    tag "${indivID}|${sampleID}|${params.assembly}"
     // publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/Processing/MarkDuplicates", mode: 'copy'
 
     scratch true
@@ -216,7 +177,6 @@ process runMarkDuplicates {
 // Generate a model for base recalibration within target intervals
 process runBaseRecalibrator {
 
-	tag "${indivID}|${sampleID}|${params.assembly}|batch: ${region_tag}"
     	// publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/Processing/BaseRecalibrator/batches", mode: 'copy'
 
     	scratch true
@@ -250,7 +210,6 @@ ReportsBySample = outputBaseRecalibrator.groupTuple(by: [0,1])
 
 process runGatherBQSRReports {
 
-	tag "${indivID}|${sampleID}|${params.assembly}|ALL"
         // publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/Processing/BaseRecalibrator/"
 
 	input:
@@ -279,7 +238,6 @@ inputForApplyBQSR = MergedReport.join(BamForBQSR, by: [0,1])
 
 process runApplyBQSR {
 
-	tag "${indivID}|${sampleID}|${params.assembly}"
 	publishDir "${OUTDIR}/${params.assembly}/cram/", mode: 'copy'
 
 	scratch true

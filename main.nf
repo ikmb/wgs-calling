@@ -114,12 +114,10 @@ process runFastp {
   html = indivID + "_" + sampleID + "_" + libraryID + ".fastp.html"
 
   """
-	fastp --in1 $fastqR1 --in2 $fastqR2 --out1 $left --out2 $right --detect_adapter_for_pe -w ${task.cpus} -s ${task.cpus*3} -j $json -h $html
+	fastp --in1 $fastqR1 --in2 $fastqR2 --out1 $left --out2 $right --detect_adapter_for_pe -w ${task.cpus} -j $json -h $html
   """
 
 }
-
-inputBwa = outputTrimAndSplit.transpose( by: [9,10] )
 
 // Run BWA on each trimmed chunk
 process runBwa {
@@ -145,14 +143,12 @@ process runBwa {
     """
 }
 
-inputFixTags = runBWAOutput.groupTuple(by: [0,1])
-
 process runFixTags {
 
 	scratch params.scratch
 
 	input:
-    	set indivID, sampleID, file(aligned_bam_list) from inputFixTags
+    	set indivID, sampleID, file(aligned_bam) from runBWAOutput
 
 	output:
 	set indivID,sampleID,file(bam_fixed),file(bam_fixed_bai) into inputMarkDuplicates
@@ -162,15 +158,11 @@ process runFixTags {
 	bam_fixed_bai = bam_fixed + ".bai"
 
 	"""
-		gatk MergeSamFiles \
-         	        -I ${aligned_bam_list.join(' -I ')} \
-	                -O /dev/stdout \
-			--USE_THREADING true \
-	                --SORT_ORDER coordinate | gatk SetNmMdAndUqTags \
-			-I /dev/stdin \
-			-O $bam_fixed \
-			-R $REF \
-			--IS_BISULFITE_SEQUENCE false 
+                gatk SetNmMdAndUqTags \
+		-I $aligned_bam \
+		-O $bam_fixed \
+		-R $REF \
+		--IS_BISULFITE_SEQUENCE false 
 
 		samtools index $bam_fixed
 
