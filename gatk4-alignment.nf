@@ -51,8 +51,6 @@ use_scratch = params.scratch
 
 // Make sure the Nextflow version is current enough
 
-logParams(params, "nextflow_parameters-gatk4_alignment.txt")
-
 // Header log info
 log.info "========================================="
 log.info "GATK Best Practice for Genome-Seq Preprocessing v${workflow.manifest.version}"
@@ -65,7 +63,7 @@ log.info "========================================="
 
 Channel.from(inputFile)
        .splitCsv(sep: ';', header: true)
-       .set {  inputFastp }
+       .set { inputFastp }
 
 process runFastp {
 
@@ -99,7 +97,6 @@ process runBwa {
     set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, center, run_date,file(fastqR1),file(fastqR2) from inputBwa
 
     output:
-
     set indivID, sampleID, file(outfile) into runBWAOutput
 
     script:
@@ -117,7 +114,7 @@ process runFixTags {
 	scratch true
 
 	input:
-    	set val(indivID), val(sampleID), file(aligned_bam) runBWAOutput
+    	set val(indivID), val(sampleID), file(aligned_bam) from runBWAOutput
 
 	output:
 	set val(indivID),val(sampleID),file(bam_fixed),file(bam_fixed_bai) into inputMarkDuplicates
@@ -437,28 +434,3 @@ workflow.onComplete {
   }
 
 }
-
-
-//#############################################################################################################
-//#############################################################################################################
-//
-// FUNCTIONS
-//
-//#############################################################################################################
-//#############################################################################################################
-
-
-// ------------------------------------------------------------------------------------------------------------
-//
-// Read input file and save it into list of lists
-//
-// ------------------------------------------------------------------------------------------------------------
-def logParams(p, n) {
-  File file = new File(n)
-  file.write "Parameter:\tValue\n"
-
-  for(s in p) {
-     file << "${s.key}:\t${s.value}\n"
-  }
-}
-
