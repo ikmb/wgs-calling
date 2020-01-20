@@ -145,62 +145,40 @@ process runBwa {
 
 process runFixTags {
 
-	scratch params.scratch
+        scratch true
 
-	input:
-    	set indivID, sampleID, file(aligned_bam) from runBWAOutput
+        input:
+        set val(indivID), val(sampleID), file(aligned_bam) from runBWAOutput
 
-	output:
-	set indivID,sampleID,file(bam_fixed),file(bam_fixed_bai) into inputMarkDuplicates
+        output:
+        set indivID, sampleID, file(outfile_bam),file(outfile_bai) into runMarkDuplicatesOutput
+        file(outfile_metrics) into runMarkDuplicatesOutput_QC
+        file(outfile_md5) into MarkDuplicatesMD5
 
-	script:
-	bam_fixed = indivID + "_" + sampleID + ".fixed_tags.bam"
-	bam_fixed_bai = bam_fixed + ".bai"
+        script:
+        outfile_bam = indivID + "_" + sampleID + ".dedup.bam"
+        outfile_bai = indivID + "_" + sampleID + ".dedup.bai"
+        outfile_md5 = indivID + "_" + sampleID + ".dedup.bam.md5"
 
-	"""
+        outfile_metrics = sampleID + "_duplicate_metrics.txt"
+
+        """
                 gatk SetNmMdAndUqTags \
-		-I $aligned_bam \
-		-O $bam_fixed \
-		-R $REF \
-		--IS_BISULFITE_SEQUENCE false 
-
-		samtools index $bam_fixed
-
-	"""
-}
-
-// Mark duplicate reads. This uses a discontinuted implementation of MD to fully leverage CRAM format
-process runMarkDuplicates {
-
-    scratch params.scratch
-
-    input:
-    set indivID, sampleID, file(bam), file(bai) from inputMarkDuplicates
-    
-    output:
-    set indivID, sampleID, file(outfile_bam),file(outfile_bai) into runMarkDuplicatesOutput
-    
-    file(outfile_metrics) into runMarkDuplicatesOutput_QC
-    file(outfile_md5) into MarkDuplicatesMD5
-    
-    script:
-    outfile_bam = indivID + "." + sampleID + ".dedup.bam"
-    outfile_bai = indivID + "." + sampleID + ".dedup.bai"
-    outfile_md5 = indivID + "." + sampleID + ".dedup.bam.md5"
-
-    outfile_metrics = sampleID + "_duplicate_metrics.txt"	
-
-    """
-        gatk --java-options "-Xms4G -Xmx${task.memory.toGiga()-3}G" MarkDuplicates \
-                -I ${bam} \
+                -I $aligned_bam \
+                -O /dev/stdout \
+                -R $REF \
+                --IS_BISULFITE_SEQUENCE false | \
+                 gatk --java-options "-Xms4G -Xmx${task.memory.toGiga()-3}G" MarkDuplicates \
+                -I /dev/stdin \
                 -O ${outfile_bam} \
                 -R ${REF} \
                 -M ${outfile_metrics} \
                 --CREATE_INDEX true \
+                --TMP_DIR \$TMPDIR \
                 --MAX_RECORDS_IN_RAM 1000000 \
-		--ASSUME_SORT_ORDER coordinate \
-                --CREATE_MD5_FILE true \
-		--TMP_DIR \$TMPDIR 
+                --ASSUME_SORT_ORDER coordinate \
+                --CREATE_MD5_FILE true
+
         """
 }
 
