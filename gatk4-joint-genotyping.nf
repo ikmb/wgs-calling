@@ -100,6 +100,9 @@ process runGenomicsDBImport  {
 		--reference $REF \
 		-L $region \
 		--genomicsdb-workspace-path $genodb \
+		--batch-size 50 \
+	       --reader-threads ${task.cpus}
+
 	"""
 
 }

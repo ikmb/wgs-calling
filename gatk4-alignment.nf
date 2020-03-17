@@ -131,11 +131,12 @@ process runFixTags {
 	"""
 		gatk SetNmMdAndUqTags \
                 -I $aligned_bam \
-                -O /dev/stdout \
+                -O alignment.clean.bam \
                 -R $REF \
-                --IS_BISULFITE_SEQUENCE false | \
-		 gatk --java-options "-Xms4G -Xmx${task.memory.toGiga()-3}G" MarkDuplicates \
-                -I /dev/stdin \
+                --IS_BISULFITE_SEQUENCE false 
+		
+		gatk --java-options "-Xms4G -Xmx${task.memory.toGiga()-3}G" MarkDuplicates \
+                -I alignment.clean.bam \
                 -O ${outfile_bam} \
                 -R ${REF} \
                 -M ${outfile_metrics} \
@@ -143,8 +144,10 @@ process runFixTags {
                 --TMP_DIR \$TMPDIR \
                 --MAX_RECORDS_IN_RAM 1000000 \
                 --ASSUME_SORT_ORDER coordinate \
-                --CREATE_MD5_FILE true		
-		
+                --CREATE_MD5_FILE true
+
+		rm alignment.clean.bam
+
 	"""
 }
 

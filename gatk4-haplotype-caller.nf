@@ -59,7 +59,7 @@ Channel.from(inputFile)
 
 process runHCSample {
 
-  // scratch use_scratch
+  scratch true
 
   input:
   set indivID,sampleID,bam,bai from inputHCSample
@@ -90,6 +90,8 @@ VariantsPerSample = inputCombineVariants.groupTuple(by: [0,1])
 process combineVariantsFromGenotyping {
 
 	publishDir "${OUTDIR}/${params.assembly}/HC", mode: 'copy'
+
+	scratch true
 
 	input:
 	set indivID,sampleID,file(vcf_files),file(indices) from VariantsPerSample

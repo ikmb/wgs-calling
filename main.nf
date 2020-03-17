@@ -98,7 +98,7 @@ Channel.from(inputFile)
 
 process runFastp {
 
-  //scratch params.scratch
+  scratch true
 
   input:
   set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, center, run_date, fastqR1, fastqR2 from inputFastp
@@ -122,7 +122,7 @@ process runFastp {
 // Run BWA on each trimmed chunk
 process runBwa {
 
-    scratch params.scratch
+    scratch true
 
     input:
     set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file(fastqR1),file(fastqR2) from inputBwa
