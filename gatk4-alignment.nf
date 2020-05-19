@@ -17,13 +17,16 @@ if (params.genomes.containsKey(params.assembly) == false) {
    exit 1, "Specified unknown genome assembly, please consult the documentation for valid assemblies."
 }
 
-REF = file(params.genomes[ params.assembly ].fasta)
-DICT = file(params.genomes[ params.assembly ].dict)
-DBSNP = file(params.genomes[ params.assembly ].dbsnp )
-G1K = file(params.genomes[ params.assembly ].g1k )
-MILLS = file(params.genomes[ params.assembly ].mills )
-INTERVALS = file(params.genomes[ params.assembly ].intervals )
-INTERVAL_LIST = file(params.genomes[ params.assembly ].interval_list )
+REF = params.fasta ?: file(params.genomes[ params.assembly ].fasta)
+DICT = params.dict ?: file(params.genomes[ params.assembly ].dict)
+DBSNP = params.dbsnp ?: file(params.genomes[ params.assembly ].dbsnp )
+MILLS = params.mills ?: file(params.genomes[ params.assembly ].mills )
+if (params.intervals) {
+	INTERVALS = file(params.intervals)
+} else {
+	INTERVALS = file(params.genomes[ params.assembly ].intervals )
+}
+INTERVAL_LIST = params.interval_list ?: file(params.genomes[ params.assembly ].interval_list )
 
 // This is a bit simplistic and uses each interval , instead of pooling smaller intervals into one job. 
 regions = []
@@ -264,6 +267,8 @@ process runAlignmentStats {
 
         publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/picard_stats", mode: 'copy'
 
+	scratch true
+
 	input:
 	set val(indivID),val(sampleID),val(bam),val(bai) from BamForAlignStats
 
@@ -285,6 +290,8 @@ process runAlignmentStats {
 process runWgsCoverage {
 
 	publishDir "${OUTDIR}/${params.assembly}/${indivID}/${sampleID}/picard_stats", mode: 'copy'
+
+	scratch true
 
 	input:
 	set val(indivID),val(sampleID),val(bam),val(bai) from BamForWGSStats

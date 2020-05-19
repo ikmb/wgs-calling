@@ -74,7 +74,7 @@ process runHCSample {
   vcf_index = vcf + ".tbi"
 
   """ 
-	gatk --java-options "-Xms16G -Xmx${task.memory.toGiga()}G" HaplotypeCaller \
+	gatk --java-options "-Xms4G -Xmx${task.memory.toGiga()}G" HaplotypeCaller \
 		-R $REF \
 		-I $bam \
 		-O $vcf \

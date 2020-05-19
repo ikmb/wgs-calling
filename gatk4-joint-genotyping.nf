@@ -25,6 +25,7 @@ OMNI = file(params.genomes[ params.assembly ].omni )
 HAPMAP = file(params.genomes[ params.assembly ].hapmap )
 AXIOM = file(params.genomes[ params.assembly ].axiom )
 INTERVALS = params.intervals ? file(params.intervals) : file(params.genomes[params.assembly ].intervals )
+INTERVAL_LIST = file(params.genomes[ params.assembly ].interval_list )
 
 regions = []
 
@@ -88,20 +89,21 @@ process runGenomicsDBImport  {
 	each region from regions
 	
 	output:
-        set region,file(genodb) into inputJoinedGenotyping
+        set region,file(vcf_chunk),file(vcf_index) into inputJoinedGenotyping
 
 	script:
  	region_tag = region.trim().replace(/:/, '_')
-	genodb = "genodb_${region_tag.replaceAll(':','_')}"
+	vcf_chunk = "variants.${region_tag}.raw.g.vcf.gz"
+	vcf_index = vcf_chunk + ".tbi"
 
 	"""
-		gatk --java-options "-Xmx${task.memory.toGiga()}G" GenomicsDBImport  \
+
+		gatk --java-options "-Xmx${task.memory.toGiga()}G" CombineGVCFs \
 		--variant ${vcf_list.join(" --variant ")} \
+		--output $vcf_chunk \
 		--reference $REF \
 		-L $region \
-		--genomicsdb-workspace-path $genodb \
-		--batch-size 50 \
-	       --reader-threads ${task.cpus}
+		-OVI
 
 	"""
 
@@ -117,7 +119,7 @@ process runGenotypeGVCFs {
         scratch use_scratch
   
 	input:
-	set region,file(genodb) from inputJoinedGenotyping
+	set region,file(chunk),file(idx) from inputJoinedGenotyping
   
 	output:
 	file(gvcf) into inputCombineVariantsFromGenotyping
@@ -132,7 +134,7 @@ process runGenotypeGVCFs {
 		--only-output-calls-starting-in-intervals \
 		--use-new-qual-calculator \
 		--dbsnp $DBSNP \
-		-V gendb://${genodb} \
+		-V $chunk \
                	--output $gvcf \
                 -G StandardAnnotation \
 		-L $region \
@@ -454,7 +456,7 @@ process runCollectVariantCallingMetrics {
 		gatk --java-options "-Xmx${task.memory.toGiga()}G" CollectVariantCallingMetrics \
 		-I ${filtered_gvcf} \
 		-O genotypes \
-		-TI $INTERVALS \
+		-TI $INTERVAL_LIST \
 		--DBSNP $DBSNP
 	"""
 	

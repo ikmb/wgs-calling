@@ -104,7 +104,7 @@ process runFastp {
   set indivID, sampleID, libraryID, rgID, platform_unit, platform, platform_model, center, run_date, fastqR1, fastqR2 from inputFastp
 
   output:
-  set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file("*${left}"),file("*${right}") into outputTrimAndSplit
+  set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file("*${left}"),file("*${right}") into inputBwa
   set indivID, sampleID, libraryID, file(json),file(html) into outputReportTrimming
 
   script:
@@ -122,7 +122,7 @@ process runFastp {
 // Run BWA on each trimmed chunk
 process runBwa {
 
-    scratch true
+    // scratch true
 
     input:
     set val(indivID), val(sampleID), val(libraryID), val(rgID), val(platform_unit), val(platform), val(platform_model), val(center), val(run_date),file(fastqR1),file(fastqR2) from inputBwa
@@ -145,7 +145,7 @@ process runBwa {
 
 process runFixTags {
 
-        scratch true
+        // scratch true
 
         input:
         set val(indivID), val(sampleID), file(aligned_bam) from runBWAOutput
@@ -165,11 +165,12 @@ process runFixTags {
         """
                 gatk SetNmMdAndUqTags \
                 -I $aligned_bam \
-                -O /dev/stdout \
+                -O alignment.fixed.bam \
                 -R $REF \
-                --IS_BISULFITE_SEQUENCE false | \
-                 gatk --java-options "-Xms4G -Xmx${task.memory.toGiga()-3}G" MarkDuplicates \
-                -I /dev/stdin \
+                --IS_BISULFITE_SEQUENCE false 
+
+		gatk --java-options "-Xms4G -Xmx${task.memory.toGiga()-3}G" MarkDuplicates \
+                -I alignment.fixed.bam \
                 -O ${outfile_bam} \
                 -R ${REF} \
                 -M ${outfile_metrics} \
@@ -178,6 +179,8 @@ process runFixTags {
                 --MAX_RECORDS_IN_RAM 1000000 \
                 --ASSUME_SORT_ORDER coordinate \
                 --CREATE_MD5_FILE true
+
+		rm alignment.fixed.bam
 
         """
 }
