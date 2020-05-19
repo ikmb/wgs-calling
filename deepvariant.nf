@@ -1,11 +1,9 @@
 #!/usr/bin/env nextflow
 
 folder = params.folder
-run_mode = "WGS"
+model = "WGS"
 
 params.outdir = "deepvariant"
-
-OUTDIR = file(params.outdir)
 
 // Specifies the underlying genome assembly
 params.assembly = "hg38"
@@ -76,12 +74,18 @@ if(params.bed) {
 	.ifEmpty {exit 1, "bed file not found: ${params.bed}"}
 }
 
-Channel.fromPath("${params.folder}/*.*am")
-	.set { inputDv }
+bams = Channel.fromPath(params.folder + "/*am") 
+/**
+**/
+bais = Channel.fromPath(params.folder + "/*ai")
+/**
+**/
+
+inputDv = bams.merge(bais)
 
 // ****************************
-// START WORKFLOW - MAKE INDICES
-// ****************************
+ START WORKFLOW - MAKE INDICES
+// ****************************/
 
 if(!params.fai) {
   process preprocess_fai {
@@ -157,6 +161,7 @@ if(!params.gzi){
 }
 
 if(!params.bed) {
+
   process runMakeBed {
 	input:
 	file(intervals) from Intervals
@@ -169,7 +174,7 @@ if(!params.bed) {
 	bed_file = intervals.getBaseName() + ".bed"
 
 	"""
-		picard IntervalListToBed I=$INTERVAL_LIST O=$bed_file
+		gatk IntervalListToBed -I $INTERVAL_LIST -O $bed_file
 	"""
   }
 
@@ -178,41 +183,101 @@ if(!params.bed) {
 // RUN DEEPVARIANT
 // **************************
 
-process runDV {
+/********************************************************************
+  process make_examples
+  Getting bam files and converting them to images ( named examples )
+********************************************************************/
 
-  publishDir "${OUTDIR}/variants", mode: 'copy'
+process make_examples{
 
-  scratch true
+  tag "${bam}"
+  publishDir "${params.outdir}/make_examples", mode: 'copy',
+  saveAs: {filename -> "logs/log"}
 
   input:
-  file(bam) from inputDv
   file fai from faiToExamples.collect()
   file fastagz from fastaGzToExamples.collect()
   file gzfai from gzFaiToExamples.collect()
   file gzi from gziToExamples.collect()
   file bed from bedToExamples.collect()
+  set file(bam), file(bai) from inputDv
 
   output:
-  set file(vcf),file(tbi) into DvVCF
+  set file("${bam}"),file(bai),file('*_shardedExamples') into examples
 
   script:
+  """
+  mkdir logs
+  mkdir ${bam.baseName}_shardedExamples
+  dv_make_examples.py \
+  --cores ${task.cpus} \
+  --sample ${bam} \
+  --ref ${fastagz} \
+  --reads ${bam} \
+  --regions ${bed} \
+  --logdir logs \
+  --examples ${bam.baseName}_shardedExamples
+  """
+}
+/********************************************************************
+  process call_variants
+  Doing the variant calling based on the ML trained model.
+********************************************************************/
 
-  vcf = bam.getBaseName() + ".vcf.gz"
-  gvcf = bam.getBaseName() + ".g.vcf.gz" 
-  vcf_tbi = vcf + ".tbi"
-  gvcf_tbi = gvcf + ".tbi"
+process call_variants{
+
+  tag "${bam}"
+
+  input:
+  set file(bam),file(bai),file(shardedExamples) from examples
+
+  output:
+  set file(bam),file(bai),file('*_call_variants_output.tfrecord') into called_variants
+
+  script:
+  """
+  dv_call_variants.py \
+    --cores ${task.cpus} \
+    --sample ${bam} \
+    --outfile ${bam.baseName}_call_variants_output.tfrecord \
+    --examples $shardedExamples \
+    --model ${model}
+  """
+}
+
+/********************************************************************
+  process postprocess_variants
+  Trasforming the variant calling output (tfrecord file) into a standard vcf file.
+********************************************************************/
+
+process postprocess_variants{
+
+  tag "${bam}"
+
+  publishDir params.outdir, mode: 'copy'
+
+  input:
+  file fastagz from fastaGzToVariants.collect()
+  file gzfai from gzFaiToVariants.collect()
+  file gzi from gziToVariants.collect()
+  set file(bam),file(bai),file('call_variants_output.tfrecord') from called_variants
+
+  output:
+  set val("${vcf_gz}"),file("${vcf_gz_tbi}") into postout
+
+  script:
+  vcf = bam.getBaseName() + ".vcf"
+  vcf_gz = vcf + ".gz"
+  vcf_gz_tbi = vcf +".tbi"
 
   """
-	run_deepvariant \
-	--model_type=$run_mode \
-	--ref=$fastagz \
-  	--reads=$bam \
-  	--regions $bed \
-  	--output_vcf=$vcf \
-  	--output_gvcf=$gvcf \
-  	--num_shards=${task.cpus} 	
-  """
+  dv_postprocess_variants.py \
+  --ref ${fastagz} \
+  --infile call_variants_output.tfrecord \
+  --outfile "${bam}.vcf"
 
+  bgzip $vcf && tabix $vcfgz
+  """
 }
 
 if (params.email) {
